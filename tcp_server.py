@@ -111,13 +111,13 @@ def handle_send_message():
     global vetor_logico, meu_indice
     while True:
         vetor_logico[meu_indice] += 1
-        # c = 1
+        c = 1
         for porta in portas:
-            if porta == port:
+            if porta == port:   
                 continue
             send_message('Tchau', porta)
-            # time.sleep(1 + c)
-            # c += 1
+            time.sleep(1 + c)
+            c += 1
         time.sleep(4)
 
 if __name__ == '__main__':
