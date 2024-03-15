@@ -1,89 +1,102 @@
+import random
 import sys
 import threading
 import socket
 import time
 
-#Estabelecendo o Servidor no Localhost
 host = '127.0.0.1'
 port = 55555
-'''server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((host, port))
-#Servidor agora esta ouvindo
-server.listen()'''
+portas = [5001, 5002, 5003, 5004]
+minha_porta = 5001
+meu_indice = 0
+fila_mensagens = []
+vetor_logico = [0, 0, 0, 0]
 
-#Lista para os clientes e seus nomes
-#Relacionar com os Processos
 clients = []
 names = []
 
-'''#Função para exibir para todos os clientes uma mensagem enviada
-def broadcast(message):
-    for client in clients:
-        client.send(message)'''
-
-#Tratamento das mensagens enviadas pelos clientes
-def handle_client(client):
-    # recebe dados do cliente e os imprime no console
+def handle_client(client, ):
     while True:
-        data = client.recv(1024)
-        if not data:
+        dados = client.recv(1024).decode("utf-8")
+        if not dados:
             break
-        print(f"TCP Received: {data.decode('utf-8')}")
-    
-    # se não houver mais dados o loop é encerrado e o socket do cliente é fechado
+        global vetor_logico, meu_indice, fila_mensagens
+        mensagem, relogio_recebido, indice_recebido = dados.split(';')
+        indice_recebido = int(indice_recebido)
+        relogio_recebido = [int(x) for x in relogio_recebido.split(',')]
+        vetor_novo = vetor_logico.copy()
+        vetor_novo[indice_recebido] += 1
+        print("Vetor novo:", vetor_novo)
+        print("Relogio recebido: ", relogio_recebido)
+        if vetor_novo == relogio_recebido:
+            print(f"Mensagem recebida: {mensagem}")
+            print(f"Vetor antigo: {vetor_logico}")
+            print(f"Vetor resultante: {vetor_novo}")
+            vetor_logico = vetor_novo.copy()
+            verificar_fila()
+        else:
+            print(f"Mensagem recebida: {mensagem}")
+            print(f"Vetores lógicos diferem. A mensagem será guardada em uma fila")
+            fila_mensagens.append((mensagem, relogio_recebido, indice_recebido))
     client.close()
 
-'''def receive():
-    while True:
-        print('Servidor rodando e ouvindo...')
-        #Estabelecendo conexão com o cliente
-        client, address = server.accept()
-        print(f'Conexão estabelecida com {str(address)}')
-        #Recebendo o nome do processo pra guardar
-        client.send('Qual processo?'.encode('utf-8'))
-        name = client.recv(1024)
-        #Regularizando conexão
-        names.append(name)
-        clients.append(client)
-        print(f'Processo: {name}'.encode('utf-8'))
-        broadcast(f'{name} esta conectado'.encode('utf-8'))
-        client.send('Processo conectado com sucesso'.encode('utf-8'))
-        thread = threading.Thread(target=handle_client, args=(client,))
-        thread.start()'''
+def verificar_fila():
+  global fila_mensagens, vetor_logico, meu_indice
+  if (fila_mensagens):
+    for i, m in enumerate(fila_mensagens):
+      mensagem, relogio_recebido, indice_recebido = m
+      vetor_novo = vetor_logico.copy()
+      vetor_novo[indice_recebido] += 1
+      if vetor_novo == relogio_recebido:
+        print("Mensagem retirada da fila de espera:")
+        print(f"Mensagem recebida: {mensagem}")
+        print(f"Vetor antigo: {vetor_logico}")
+        print(f"Vetor resultante: {vetor_novo}")
+        vetor_logico = vetor_novo.copy()
+        fila_mensagens.pop(i)
 
 def tcp_chat():
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # cria um socket TCP
-    tcp_socket.bind((host, port)) # faz o bind para o endereço e porta desejados
-    tcp_socket.listen(5) # começa a ouvir por conexões
+    global vetor_logico, meu_indice
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+    tcp_socket.bind((host, port))
+    tcp_socket.listen(5) 
     print(f"TCP Server listening on port {port}")
 
-    # quando um cliente se conecta, inicia uma nova thread (client_handler) para lidar com esse cliente
     while True:
+        print("tcp_chat")
         client, addr = tcp_socket.accept()
         print(f"TCP Connection from {addr}")
+        print(vetor_logico)
         client_handler = threading.Thread(target=handle_client, args=(client,))
         client_handler.start()
 
-'''def tcp_comm():
-    while True:
-        time.sleep(4)
-        message = ('Exemplo'.encode('utf-8'))
-        broadcast(message)'''
-
-def send_message(message):
+def send_message(m, port):
+    global vetor_logico, meu_indice
+    print(f"Enviando a mensagem: {m}, para o endereco: {port} [vetor lógico atual: {vetor_logico}]")
     tcp_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_client.connect((host, port))
-    tcp_client.send(message.encode('utf-8'))
+    tcp_client.send(str(f"{m};{','.join(map(str, vetor_logico))};{meu_indice}").encode('utf-8'))
     tcp_client.close()
 
 def handle_send_message():
+    global vetor_logico, meu_indice
     while True:
-        send_message('Tchau')
+        vetor_logico[meu_indice] += 1
+        for porta in portas:
+            if porta == port:
+                continue
+            send_message('Tchau', porta)
         time.sleep(4)
 
 if __name__ == '__main__':
     tcp_server_thread = threading.Thread(target=tcp_chat)
+    tcp_server_thread.daemon = True
     tcp_server_thread.start()
     args = sys.argv[1:]
     port = int(args[0])
-    handle_send_message()
+    meu_indice = portas.index(port)
+    resp = input("Comecar a comunicar?")
+    
+    if(resp == 's'):
+        handle_send_message()
+    
